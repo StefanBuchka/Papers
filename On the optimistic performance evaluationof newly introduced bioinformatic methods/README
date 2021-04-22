@@ -1,0 +1,8 @@
+
+
+-	The files analysis_1_level_of_paper_Buchka_et_al.R and analysis_2_level_of_substudy_Buchka_et_al.R allow to reproduce the results of the first and second analyses, respectively, based on the dataset included in file data_set_of_extracted_data_Buchka_et_al.xlsx. 
+
+-	These results are available from the RData-files comparisons_papers.RData and comparisons_substudies.RData, respectively.
+
+-	The file plot_figure_Buchka_et_al.R can be used to generate Figure 2 based on these RData-files.
+
