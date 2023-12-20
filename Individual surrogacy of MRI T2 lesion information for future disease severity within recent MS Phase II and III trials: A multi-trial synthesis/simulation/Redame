@@ -1,0 +1,3 @@
+Here you can find the scripts to create the simulation data (simulation_data.R) and to run the simulation presented in the paper. It might be, that you need helper functions (you can find thme in the helper_function folder) 
+With sim_r2_tp.R you can run the time laged simulation study (more details in the paper and the R script)
+Be carefull: To run the simulation study you need high computational power. 
