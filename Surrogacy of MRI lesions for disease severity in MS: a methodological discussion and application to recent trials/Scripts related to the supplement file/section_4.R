@@ -135,9 +135,9 @@ results %>%
   ggplot() +
   geom_errorbar(aes(x = var_CEP, ymin = `2.5%`, ymax = `97.5%`, color = Metric), width = 0.2) +
   geom_point(aes(x = var_CEP, y = `Value (Bias corrected)`, color = Metric)) +
-  labs(title = expression("Effect of SEP/CEP variance on PTE and" ~ R[hindiv]^2),
+  labs(title = "Effect of SEP/CEP variance on LR-test, LRF, and PTE",
        x = "Variance of the clinical enpoint",
-       y = expression("PTE or"~R[hindiv]^2),
+       y = "p-value of LR-test\nLRF\nPTE",
        color = "Metric", fill = "Metric") +
   coord_cartesian(ylim = c(0, 1.2), clip = "on") +
   scale_x_continuous(breaks = seq(0, 2, 0.5)) +
