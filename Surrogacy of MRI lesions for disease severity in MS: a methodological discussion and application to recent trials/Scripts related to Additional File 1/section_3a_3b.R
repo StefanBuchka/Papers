@@ -53,6 +53,54 @@ cat("R²bindiv:", R2bindiv, "\n")
 rm(list = ls()[which(ls() != "contingency_table")])
 
 
+####### High and significant odds ratios, but low LRF
+
+# MI and a logistic regression model
+# Load required packages
+if (!require("data.table")) install.packages("data.table")
+library(data.table)
+#
+# ---- 1. Simulate Binary Risk Factors and Outcome ----
+set.seed(123)
+n <- 1000
+X1 <- rbinom(n, 1, 0.5)
+X2 <- rbinom(n, 1, 0.4)
+X3 <- rbinom(n, 1, 0.3)
+
+# Simulate binary outcome using a logistic model
+logit <- -1 + 1.2 * X1 + 0.8 * X2 + 1.5 * X3
+p <- 1 / (1 + exp(-logit))
+Y <- rbinom(n, 1, p)
+
+# ---- 2. Fit Logistic Regression Model ----
+data <- data.table(Y, X1, X2, X3)
+model <- glm(Y ~ X1 + X2 + X3, data = data, family = binomial())
+summary(model)
+data[, prob := predict(model, type = "response")]
+
+# ---- 3. Prevalence of Risk Combinations ----
+data[, risk_group := paste0("X1_", X1, "_X2_", X2, "_X3_", X3)]
+risk_summary <- data[, .(count = .N,prevalence = mean(Y),
+                         mean_pred_prob = mean(prob)), by = risk_group]
+#
+print(risk_summary)
+#
+# calculate MI for the whole setting
+#
+str(risk_summary)
+#
+P.x<-risk_summary$count/sum(risk_summary$count)
+P.y<-c(sum(P.x*(1-risk_summary$mean_pred_prob)),sum(P.x*risk_summary$mean_pred_prob))
+P.xy<-c(P.x*(1-risk_summary$mean_pred_prob),P.x*(risk_summary$mean_pred_prob))
+P.xy.below<-c(P.x*P.y[1],P.x*P.y[2])
+MI.log.reg<-sum(P.xy*log2(P.xy/P.xy.below))
+#
+1-exp(-2*MI.log.reg)
+#
+
+
+
+
 
 
 ####### Estimate mutual information by logistic regression
@@ -111,9 +159,3 @@ R2bindiv <- MI/min(H_CEP,H_SEP)
 # Output results
 cat("Mutual Information (MI):", MI, "\n")
 cat("R²bindiv (individual-level surrogacy):", R2bindiv, "\n")
-
-
-
-
-
-
