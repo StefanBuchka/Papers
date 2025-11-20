@@ -1,0 +1,303 @@
+---
+title: "Untitled"
+author: "Stefan Buchka"
+output: html_document
+---
+
+
+# Dataset creation
+```{r, echo=FALSE}
+ setwd("/scripts")
+source("dataset_creation.R")
+```
+
+# Common visit
+```{r, echo=FALSE}
+ setwd("/scripts")
+source("common_visit.R")
+```
+
+# Dataset exclusion
+## Exclusion of study "CFTY720D1201E", because no control arm is present
+
+```{r}
+ # Exclusion of Extension study CFTY720D1201E, because there is no comparison arm is present. 
+nrow_mri <- nrow(mri)
+mri <- mri[-which(mri$study == "CFTY720D1201E"),]
+nrow_mri
+nrow(mri)
+
+nrow_arr <- nrow(arr)
+arr <- arr[-which(arr$study == "CFTY720D1201E"),]
+nrow_arr
+nrow(arr)
+
+nrow_edss <- nrow(edss)
+edss <- edss[-which(edss$study == "CFTY720D1201E"),]
+nrow_edss
+nrow(edss)
+```
+
+## Exclude all entries of open label study of ROCHE
+```{r}
+visit_ex_function <- function(data = data)
+{
+  data <- data %>%
+    filter(!(is.na(visit_com) & is.na(day))) %>% #exclude all unscheduled visits with no timepoint assigned.
+    filter(!(study == "WA21092" & visit %in% c(13,15,17,18,19,21,43))) %>% # filter all visits of the open label extention (OLE)
+    filter(!(study == "WA21093" & visit %in% c(13,15,17,18,19,21,43))) %>% # filter all visits of the open label extention (OLE)
+    filter(!(study == "WA21493" & visit %in% c(36:51,25,56,60,62,64,66,68,70,72,106,34,35))) # filter all visits of the open label extention (OLE)
+  
+  return(data)
+}
+
+n_mri <- nrow(mri)
+n_edss <- nrow(edss)
+n_dp <- nrow(dp)
+
+mri <- visit_ex_function(data = mri)
+n_mri
+nrow(mri)
+
+
+edss <- visit_ex_function(data = edss)
+n_edss
+nrow(edss)
+
+
+dp <- visit_ex_function(data = dp)
+n_dp
+nrow(dp)
+```
+
+## Exclusion of missing edss entries
+
+```{r}
+n_edss <- nrow(edss)
+edss <- edss %>%
+  filter(!is.na(edss_score)) 
+
+n_edss
+nrow(edss)
+```
+
+
+## Exclude observations with unplausible time entries
+
+```{r}
+n_edss <- nrow(edss)
+edss <- edss %>%
+  filter(day >= -100) %>%
+  filter(day <= 2500)
+
+n_edss
+nrow(edss)
+
+n_mri <- nrow(mri)
+mri <- mri %>%
+  filter(day >= -100) %>%
+  filter(day <= 2500)
+
+n_mri
+nrow(mri)
+```
+
+
+## Exclude all EDSS observations during a relapse
+
+```{r}
+
+n_edss <- nrow(edss)
+
+edss_ex <- edss %>%
+  dplyr::select(study,id,arm,edss_score,day)
+
+arr_ex <- arr %>% 
+  mutate(day_3M = day + 90) %>%
+  dplyr::select(study,id,arm,day,day_3M)
+
+
+merged <- merge(edss_ex,
+                arr_ex,
+                by = c("study","id","arm"),
+                suffixes = c("_edss","_arr"))
+
+merged <-  merged %>%
+  group_by(study,id,arm,day_edss) %>%
+  mutate(dur_rel = ifelse((day_edss >= day_arr & day_edss <= day_3M),1,0),
+         dur_rel2 = ifelse(sum(dur_rel) != 0,1,0)) %>%
+  ungroup() %>%
+  dplyr::select(study,id,arm,edss_score,day_edss,dur_rel2) %>%
+  distinct() %>%
+  filter(dur_rel2 == 1)
+
+names(merged)[5] <- "day"
+
+edss <- merge(edss,merged,
+              by = c("study","id","arm","edss_score","day"),
+              all.x = T)
+
+edss$dur_rel2 <- ifelse(is.na(edss$dur_rel2),0,edss$dur_rel2)
+
+edss <- edss %>%
+  filter(dur_rel2 == 0)
+
+n_edss
+nrow(edss)
+
+
+```
+
+## Exclusion of doubled entries 
+```{r}
+library(rlist)
+
+n_mri <- nrow(mri)
+
+ids_doubled_mri <- mri %>% 
+  group_by(study,id,visit) %>%
+  summarize(n = n()) %>%
+  filter(n > 1) %>%
+  as.data.frame() %>%
+  dplyr::select(id,study)
+
+mri_doubled_mri <- vector(mode = "list", length = length(ids_doubled_mri$id))
+
+if(nrow(ids_doubled_mri) > 0)
+{
+  for (i in 1:length(ids_doubled_mri$id)) 
+{
+  mri_doubled_mri[[i]] <- mri%>%
+    filter(id == ids_doubled_mri$id[i] & study == ids_doubled_mri$study[i]) %>%
+    filter(visit == visit[duplicated(visit)])
+}
+}
+
+
+mri_doubled_mri <- list.rbind(mri_doubled_mri)
+# Some visits were assigned wrongly. But the day of study seems to be right. So I did not exclude any entry.
+
+n_mri
+nrow(mri)
+
+
+#__EDSS
+
+n_edss <- nrow(edss)
+
+ids_doubled_edss <- edss %>% 
+  group_by(study,id,day) %>%
+  summarize(n = n()) %>%
+  filter(n > 1) %>%
+  as.data.frame() %>%
+  dplyr::select(id,study)
+
+edss_doubled_edss <- vector(mode = "list", length = length(ids_doubled_edss$id))
+
+for (i in 1:length(ids_doubled_edss$id)) 
+{
+  edss_doubled_edss[[i]] <- edss%>%
+    filter(id == ids_doubled_edss$id[i] & study == ids_doubled_edss$study[i]) %>%
+    filter(day %in% day[duplicated(day)])
+}
+
+
+edss_doubled_edss <- list.rbind(edss_doubled_edss)
+
+ids <- edss_doubled_edss %>%
+  group_by(study,id,day) %>% #filter all observations, which were taken at the same study day
+  summarize(n = n()) %>%
+  filter(n > 1) %>% #get doubled entries during one visit
+  as.data.frame() %>%
+  dplyr::select(id,study,day) %>%
+  #filter(visit != 999) %>% #exclude 999 visit, since it is unscheduled
+  distinct()
+
+
+edss <- edss %>%
+  group_by(study,arm,id,day) %>%
+  arrange(study,arm,id,day,visit) %>%
+  mutate(n = row_number(day)) %>%
+  filter(n == 1) %>%
+  dplyr::select(-n)
+  
+n_edss
+nrow(edss)
+
+
+```
+
+
+
+## Exclusion of patients with only one visit
+```{r}
+# EDSS
+n_edss <- nrow(edss)
+ids <- edss %>%
+  group_by(study,arm,id) %>%
+  mutate(st_id = paste0(study,"_",id)) %>%
+  mutate(n = n()) %>%
+  filter(n <= 2) %>% 
+  mutate(no_exclude = ifelse(visit_com %in% c(3,6,777),T,F),
+         no_exclude = sum(no_exclude)) %>%
+  filter(no_exclude == 0) %>%
+  dplyr::select(-no_exclude) %>%
+  ungroup() %>%
+  dplyr::select(st_id) %>%
+  distinct()
+
+edss <- edss %>%
+  mutate(st_id = paste0(study,"_",id)) %>%
+  filter(!st_id %in% ids$st_id)
+
+n_edss
+nrow(edss)
+
+
+# MRI
+n_mri <- nrow(mri)
+ids <- mri %>%
+  group_by(study,arm,id) %>%
+  mutate(st_id = paste0(study,"_",id)) %>%
+  mutate(n = n()) %>%
+  filter(n == 1) %>% 
+  ungroup() %>%
+  dplyr::select(st_id) %>%
+  distinct()
+
+mri <- mri %>%
+  mutate(st_id = paste0(study,"_",id)) %>%
+  filter(!st_id %in% ids$st_id)
+
+n_mri  
+nrow(mri)
+```
+
+```{r}
+surro_available <- mri %>% 
+  mutate(indi_t2_volume = !is.na(t2_volume),
+         indi_t2_new_or_enlarged = !is.na(t2_new_or_enlarged),
+         indi_t2_new = !is.na(t2_new),
+         indi_t2_enlarged = !is.na(t2_enlarged),
+         indi_t2_per_enlarging = !is.na(t2_per_enlarging)) %>%
+  group_by(study,arm) %>%
+  summarise(t2_volume = sum(indi_t2_volume),
+            t2_new_or_enlarged = sum(indi_t2_new_or_enlarged),
+            t2_new = sum(indi_t2_new),
+            t2_enlarged = sum(indi_t2_enlarged),
+            t2_per_enlarging = sum(indi_t2_per_enlarging)) %>%
+  as.data.frame()
+
+surro_available
+
+```
+
+```{r, echo = F}
+ save(arr, file = "/arr.RData")
+ save(mri, file = "/mri.RData")
+ save(edss, file = "/edss.RData")
+```
+
+
+
+
